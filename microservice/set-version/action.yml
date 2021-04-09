@@ -1,0 +1,65 @@
+name: 'Determine Version'
+description: 'Uses gitversion, run_number, and branch name to generate a version'
+inputs:
+  starting-build-number:
+    description: 'The build number this workflow should start with'
+    required: false
+    default: "1"
+outputs:
+  gitversion:
+    description: 'JSON data returned from GitVersion'
+    value: ${{ fromJSON(steps.run-gitversion.outputs.gitversion-output) }}
+  major-minor-patch:
+    description: 'The MajorMinorPatch value from GitVersion'
+    value: ${{ steps.set-versions.outputs.major-minor-patch }}
+  build-number:
+    description: 'The build number used when assembling the final build version'
+    value: ${{ steps.set-versions.outputs.build-number }}
+  build-version:
+    description: 'The fully assembled version for this build'
+    value: ${{ steps.set-versions.outputs.build-version }}
+  repo:
+    description: 'The repo name in the form {owner}/{name} (all in lowercase letters)'
+    value: ${{ steps.set-repo.outputs.repo }}
+  tags:
+    description: 'A comma-separated list of docker-style tags based on the build-version'
+    value: ${{ steps.set-tags.outputs.tags }}
+runs:
+  using: "composite"
+  steps:
+    - id: run-gitversion
+      run: echo ::set-output name=gitversion-output::$(docker run --rm -v "$(pwd):/repo" gittools/gitversion:5.3.5-linux-alpine.3.10-x64-netcoreapp3.1 /repo)
+      shell: bash
+    - id: set-versions
+      run: |
+        echo ::set-output name=build-number::$((${{ inputs.starting-build-number }} - 1 + ${{ github.run_number }}))
+        echo ::set-output name=major-minor-patch::${{ outputs.gitversion.MajorMinorPatch }}
+        
+        build_version=${{ outputs.gitversion.MajorMinorPatch }}.${{ outputs.build-number }}
+        
+        if [[ ${{ github.ref }} == refs/head/dev* ]] ;
+        then
+          build_version=${build_version}-dev
+        elif [[ ${{ github.ref }} == refs/head/release/* ]] || [[ ${{ github.ref }} == refs/head/hotfix/* ]] ;
+        then
+          build_version=${build_version}${{ outputs.gitversion.PreReleaseTagWithDash }}
+        else
+          build_version=${{ outputs.gitversion.EscapedBranchName }}
+        fi
+
+        echo ::set-output name=build-version::$build_version
+        echo Version: $build_version
+      shell: bash
+    - id: set-repo
+      run: echo ::set-output name=repo::$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')
+      shell: bash
+    - id: set-tags
+      run: |
+        tags=${{ outputs.repo }}:${{ outputs.build-version }}
+        if [[ ${{ github.ref }} == refs/head/dev* ]] ;
+        then
+          tags=${tags},${{ outputs.repo }}:${{ outputs.build-version }}-dev
+        fi
+
+        echo ::set-output name=tags::$tags
+      shell: bash
