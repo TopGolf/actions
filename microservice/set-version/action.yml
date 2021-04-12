@@ -8,7 +8,7 @@ inputs:
 outputs:
   gitversion:
     description: 'JSON data returned from GitVersion'
-    value: ${{ fromJSON(steps.run-gitversion.outputs.gitversion-output) }}
+    value: ${{ steps.run-gitversion.outputs.gitversion-output }}
   major-minor-patch:
     description: 'The MajorMinorPatch value from GitVersion'
     value: ${{ steps.set-versions.outputs.major-minor-patch }}
@@ -28,14 +28,18 @@ runs:
   using: "composite"
   steps:
     - id: run-gitversion
-      run: echo ::set-output name=gitversion-output::$(docker run --rm -v "$(pwd):/repo" gittools/gitversion:5.3.5-linux-alpine.3.10-x64-netcoreapp3.1 /repo)
+      run: |
+        gitversionoutput=$(docker run --rm -v "$(pwd):/repo" gittools/gitversion:5.3.5-linux-alpine.3.10-x64-netcoreapp3.1 /repo)
+        echo ::set-output name=gitversion-output::$gitversionoutput
+        echo "gitversion=$gitversionoutput" >> $GITHUB_ENV
       shell: bash
     - id: set-versions
       run: |
-        echo ::set-output name=build-number::$((${{ inputs.starting-build-number }} - 1 + ${{ github.run_number }}))
-        echo ::set-output name=major-minor-patch::${{ outputs.gitversion.MajorMinorPatch }}
+        build_number=$((${{ inputs.starting-build-number }} - 1 + ${{ github.run_number }}))
+        echo ::set-output name=build-number::$build_number
+        echo ::set-output name=major-minor-patch::${{ fromJSON($gitversion).MajorMinorPatch }}
         
-        build_version=${{ outputs.gitversion.MajorMinorPatch }}.${{ outputs.build-number }}
+        build_version=${{ fromJSON($gitversion).MajorMinorPatch }}.${build_number}
         
         if [[ ${{ github.ref }} == refs/head/dev* ]] ;
         then
@@ -44,22 +48,27 @@ runs:
         then
           build_version=${build_version}${{ outputs.gitversion.PreReleaseTagWithDash }}
         else
-          build_version=${{ outputs.gitversion.EscapedBranchName }}
+          build_version=${{ fromJSON($gitversion).EscapedBranchName }}
         fi
 
         echo ::set-output name=build-version::$build_version
+        echo "build_version=$build_version" >> $GITHUB_ENV
         echo Version: $build_version
       shell: bash
     - id: set-repo
-      run: echo ::set-output name=repo::$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')
+      run: |
+        repo=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')
+        echo ::set-output name=repo::$repo
+        echo "repo=$repo" >> $GITHUB_ENV
       shell: bash
     - id: set-tags
       run: |
-        tags=${{ outputs.repo }}:${{ outputs.build-version }}
+        tags=${{ outputs.repo }}:${$build-version}
         if [[ ${{ github.ref }} == refs/head/dev* ]] ;
         then
-          tags=${tags},${{ outputs.repo }}:${{ outputs.build-version }}-dev
+          tags=${tags},${repo}:${build-version}-dev
         fi
 
         echo ::set-output name=tags::$tags
+        echo Tags: $tags
       shell: bash
