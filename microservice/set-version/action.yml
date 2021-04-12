@@ -46,7 +46,7 @@ runs:
           build_version=${build_version}-dev
         elif [[ ${{ github.ref }} == refs/head/release/* ]] || [[ ${{ github.ref }} == refs/head/hotfix/* ]] ;
         then
-          build_version=${build_version}${{ outputs.gitversion.PreReleaseTagWithDash }}
+          build_version=${build_version}${{ fromJSON(env.gitversion).PreReleaseTagWithDash }}
         else
           build_version=${{ fromJSON(env.gitversion).EscapedBranchName }}
         fi
@@ -63,10 +63,10 @@ runs:
       shell: bash
     - id: set-tags
       run: |
-        tags=${{ outputs.repo }}:${$build-version}
+        tags=${{ env.repo }}:${{ env.build-version }}
         if [[ ${{ github.ref }} == refs/head/dev* ]] ;
         then
-          tags=${tags},${repo}:${build-version}-dev
+          tags=${tags},${{ env.repo }}:${{ env.build-version }}-dev
         fi
 
         echo ::set-output name=tags::$tags
