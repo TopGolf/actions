@@ -37,9 +37,9 @@ runs:
       run: |
         build_number=$((${{ inputs.starting-build-number }} - 1 + ${{ github.run_number }}))
         echo ::set-output name=build-number::$build_number
-        echo ::set-output name=major-minor-patch::${{ fromJSON($gitversion).MajorMinorPatch }}
+        echo ::set-output name=major-minor-patch::${{ fromJSON(env.gitversion).MajorMinorPatch }}
         
-        build_version=${{ fromJSON($gitversion).MajorMinorPatch }}.${build_number}
+        build_version=${{ fromJSON(env.gitversion).MajorMinorPatch }}.${build_number}
         
         if [[ ${{ github.ref }} == refs/head/dev* ]] ;
         then
@@ -48,7 +48,7 @@ runs:
         then
           build_version=${build_version}${{ outputs.gitversion.PreReleaseTagWithDash }}
         else
-          build_version=${{ fromJSON($gitversion).EscapedBranchName }}
+          build_version=${{ fromJSON(env.gitversion).EscapedBranchName }}
         fi
 
         echo ::set-output name=build-version::$build_version
